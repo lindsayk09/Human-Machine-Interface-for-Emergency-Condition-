@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KidCruiser Dashboard</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root { --border:#ececec; --muted:#666; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#fff; }
+    .topbar {
+      display:flex; align-items:center; gap:12px;
+      padding:12px 16px; border-bottom:1px solid var(--border);
+      position: sticky; top:0; background:#fff; z-index:10;
+    }
+    .title { font-weight:800; letter-spacing:0.2px; }
+    .muted { color:var(--muted); font-size:12px; }
+    .badge {
+      padding:6px 10px; border-radius:999px; font-size:12px;
+      border:1px solid #ddd; background:#fafafa;
+    }
+    .badge.green { background:#e9ffef; border-color:#b6f2c7; }
+    .badge.red { background:#ffe8e8; border-color:#ffb3b3; }
+    .badge.blue { background:#e8f0ff; border-color:#b3caff; }
+
+    .btn {
+      padding:10px 12px; border-radius:12px; border:1px solid #ddd;
+      background:#fff; cursor:pointer; font-weight:600;
+    }
+    .btn:hover { background:#f7f7f7; }
+
+    .layout { display:grid; grid-template-columns: 1.4fr 1fr; height: calc(100vh - 58px); }
+    #map { height:100%; }
+    .panel { padding:14px; overflow:auto; border-left:1px solid var(--border); }
+    .h { margin:0 0 10px 0; font-size:16px; }
+    .row { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px dashed var(--border); }
+    .k { color:var(--muted); font-size:12px; }
+    .v { font-weight:650; text-align:right; }
+    pre { margin:0; background:#fafafa; border:1px solid var(--border); padding:10px; border-radius:12px; overflow:auto; }
+
+    .foot { margin-top:12px; color:var(--muted); font-size:12px; line-height:1.4; }
+    .pill { display:inline-block; padding:2px 8px; border:1px solid var(--border); border-radius:999px; background:#fff; font-size:12px; color:#222; }
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <div class="title">KidCruiser Dashboard</div>
+    <div class="muted" id="conn">Connecting…</div>
+
+    <div style="margin-left:auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <span class="badge blue" id="vehBadge">VEHICLE: —</span>
+      <span class="badge" id="stateBadge">STATE: —</span>
+      <span class="badge" id="emgBadge">EMERGENCY: —</span>
+      <button class="btn" id="notifyBtn">Enable Alerts</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div id="map"></div>
+
+    <div class="panel">
+      <h3 class="h">Live Telemetry</h3>
+
+      <div class="row"><div class="k">Updated</div><div class="v" id="upd">—</div></div>
+      <div class="row"><div class="k">Lat/Lon</div><div class="v" id="ll">—</div></div>
+      <div class="row"><div class="k">Speed (m/s)</div><div class="v" id="spd">—</div></div>
+      <div class="row"><div class="k">Source</div><div class="v" id="src">—</div></div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 10px 0;">
+        <span class="pill" id="gpsPill">GPS: —</span>
+        <span class="pill" id="odomPill">ODOM: —</span>
+      </div>
+
+      <h3 class="h" style="margin-top:16px;">Raw JSON</h3>
+      <pre id="raw">{}</pre>
+
+      <div class="foot">
+        Alerts fire when <b>emergency</b> transitions from <b>false → true</b>.
+        Your browser tab must be open for alerts.
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ✅ Your Firebase RTDB base
+  const FIREBASE_DB_BASE = "https://kidcruiser-c3c68-default-rtdb.europe-west1.firebasedatabase.app";
+  // ✅ Your vehicle id (must match what Jetson writes)
+  const VEHICLE_ID = "kronach_shuttle_8";
+
+  const VEHICLE_URL = `${FIREBASE_DB_BASE}/vehicles/${VEHICLE_ID}.json`;
+
+  // Kronach center-ish for initial map view
+  const kronach = [50.241, 11.331];
+
+  const map = L.map("map").setView(kronach, 14);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+
+  const marker = L.marker(kronach).addTo(map).bindPopup(`Shuttle: ${VEHICLE_ID}`);
+  let alertsEnabled = false;
+  let lastEmergency = false;
+
+  const connEl = document.getElementById("conn");
+  const rawEl = document.getElementById("raw");
+
+  function setBadge(elId, text, cls) {
+    const el = document.getElementById(elId);
+    el.className = "badge " + (cls || "");
+    el.textContent = text;
+  }
+
+  document.getElementById("notifyBtn").onclick = async () => {
+    if (!("Notification" in window)) {
+      alert("This browser does not support notifications.");
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    alertsEnabled = (perm === "granted");
+    document.getElementById("notifyBtn").textContent = alertsEnabled ? "Alerts Enabled" : "Enable Alerts";
+  };
+
+  function fmt(n, digits=2) {
+    return (typeof n === "number") ? n.toFixed(digits) : "—";
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch(VEHICLE_URL, { cache: "no-store" });
+      const data = await r.json();
+
+      if (!data) {
+        connEl.textContent = "No data yet (waiting…)";
+        return;
+      }
+
+      connEl.textContent = "Live";
+      setBadge("vehBadge", `VEHICLE: ${data.vehicle_id || VEHICLE_ID}`, "blue");
+
+      const state = data.state || "—";
+      setBadge("stateBadge", `STATE: ${state}`, "");
+
+      const emg = !!data.emergency;
+      setBadge("emgBadge", `EMERGENCY: ${emg ? "YES" : "NO"}`, emg ? "red" : "green");
+
+      document.getElementById("upd").textContent = data.updated_at || "—";
+      document.getElementById("src").textContent = data.source || "—";
+      document.getElementById("spd").textContent = (typeof data.speed_mps === "number") ? data.speed_mps.toFixed(2) : "—";
+
+      const lat = data.lat;
+      const lon = data.lon;
+
+      const gpsOk = (typeof lat === "number" && typeof lon === "number");
+      document.getElementById("gpsPill").textContent = `GPS: ${gpsOk ? "OK" : "—"}`;
+      document.getElementById("odomPill").textContent = `ODOM: ${(typeof data.x === "number" && typeof data.y === "number") ? "OK" : "—"}`;
+
+      if (gpsOk) {
+        document.getElementById("ll").textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+        const pos = [lat, lon];
+        marker.setLatLng(pos);
+        // smooth-ish tracking
+        map.panTo(pos, { animate: true, duration: 0.5 });
+      } else {
+        document.getElementById("ll").textContent = "—";
+      }
+
+      rawEl.textContent = JSON.stringify(data, null, 2);
+
+      // Notify on false -> true
+      if (alertsEnabled && !lastEmergency && emg) {
+        new Notification("KidCruiser Emergency", {
+          body: `${VEHICLE_ID} triggered EMERGENCY`,
+        });
+      }
+      lastEmergency = emg;
+
+    } catch (e) {
+      connEl.textContent = "Disconnected";
+    }
+  }
+
+  poll();
+  setInterval(poll, 1000);
+</script>
+</body>
+</html>
