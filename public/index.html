@@ -1,188 +1,626 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>KidCruiser Dashboard</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>KidCruiser</title>
 
+  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+  <!-- React (no build) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <!-- Babel for JSX (prototype) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
   <style>
-    :root { --border:#ececec; --muted:#666; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#fff; }
-    .topbar {
-      display:flex; align-items:center; gap:12px;
-      padding:12px 16px; border-bottom:1px solid var(--border);
-      position: sticky; top:0; background:#fff; z-index:10;
+    :root{
+      --bg0:#070A10;
+      --bg1:#0b1020;
+      --card:rgba(255,255,255,0.06);
+      --card2:rgba(255,255,255,0.04);
+      --border:rgba(255,255,255,0.12);
+      --text:#EAF0FF;
+      --muted:rgba(234,240,255,0.68);
+      --good:#22C55E;
+      --warn:#F59E0B;
+      --bad:#EF4444;
+      --blue:#60A5FA;
+      --violet:#A78BFA;
+      --shadow: 0 18px 70px rgba(0,0,0,0.55);
     }
-    .title { font-weight:800; letter-spacing:0.2px; }
-    .muted { color:var(--muted); font-size:12px; }
-    .badge {
-      padding:6px 10px; border-radius:999px; font-size:12px;
-      border:1px solid #ddd; background:#fafafa;
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 700px at 15% -10%, rgba(167,139,250,0.24), transparent 60%),
+        radial-gradient(900px 600px at 85% 0%, rgba(96,165,250,0.20), transparent 55%),
+        radial-gradient(900px 700px at 50% 120%, rgba(34,197,94,0.10), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      min-height:100vh;
     }
-    .badge.green { background:#e9ffef; border-color:#b6f2c7; }
-    .badge.red { background:#ffe8e8; border-color:#ffb3b3; }
-    .badge.blue { background:#e8f0ff; border-color:#b3caff; }
-
-    .btn {
-      padding:10px 12px; border-radius:12px; border:1px solid #ddd;
-      background:#fff; cursor:pointer; font-weight:600;
+    .shell{ height:100vh; display:grid; grid-template-rows:72px 1fr; }
+    .topbar{
+      position:sticky; top:0; z-index:10;
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 0 18px;
+      border-bottom:1px solid var(--border);
+      background: rgba(7,10,16,0.55);
+      backdrop-filter: blur(16px);
     }
-    .btn:hover { background:#f7f7f7; }
+    .brand{ display:flex; align-items:center; gap:12px; }
+    .logo{
+      width:40px; height:40px; border-radius:16px;
+      background: linear-gradient(135deg, #7C3AED, #22C55E);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+    }
+    .title{ font-weight: 950; letter-spacing:0.2px; }
+    .sub{ font-size:12px; color:var(--muted); margin-top:2px; }
+    .right{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .pill{
+      padding: 8px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06);
+      font-size:12px;
+      color: rgba(234,240,255,0.88);
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .dot{ width:8px; height:8px; border-radius:999px; background: rgba(255,255,255,0.25); }
+    .dot.good{ background: var(--good); box-shadow: 0 0 0 4px rgba(34,197,94,0.16); }
+    .dot.warn{ background: var(--warn); box-shadow: 0 0 0 4px rgba(245,158,11,0.16); }
+    .dot.bad{ background: var(--bad); box-shadow: 0 0 0 4px rgba(239,68,68,0.16); }
 
-    .layout { display:grid; grid-template-columns: 1.4fr 1fr; height: calc(100vh - 58px); }
-    #map { height:100%; }
-    .panel { padding:14px; overflow:auto; border-left:1px solid var(--border); }
-    .h { margin:0 0 10px 0; font-size:16px; }
-    .row { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px dashed var(--border); }
-    .k { color:var(--muted); font-size:12px; }
-    .v { font-weight:650; text-align:right; }
-    pre { margin:0; background:#fafafa; border:1px solid var(--border); padding:10px; border-radius:12px; overflow:auto; }
+    .btn{
+      cursor:pointer;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color:var(--text);
+      padding:10px 12px;
+      font-weight:800;
+    }
+    .btn:hover{ background: rgba(255,255,255,0.10); }
 
-    .foot { margin-top:12px; color:var(--muted); font-size:12px; line-height:1.4; }
-    .pill { display:inline-block; padding:2px 8px; border:1px solid var(--border); border-radius:999px; background:#fff; font-size:12px; color:#222; }
+    .layout{
+      height: calc(100vh - 72px);
+      display:grid;
+      grid-template-columns: 1.65fr 1fr;
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .card{
+      border:1px solid var(--border);
+      background: var(--card);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .cardHead{
+      padding: 14px 14px 12px 14px;
+      display:flex; align-items:center; justify-content:space-between;
+      border-bottom:1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.02);
+    }
+    .cardTitle{ font-weight: 950; }
+    .cardBody{ padding: 14px; }
+
+    .grid3{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .grid2{ display:grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+    .stat{
+      padding: 12px;
+      border-radius: 18px;
+      border:1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.18);
+    }
+    .k{ font-size:12px; color:var(--muted); }
+    .v{ margin-top:6px; font-weight: 950; font-size: 18px; }
+
+    .mapWrap{ height: 440px; border-radius: 18px; overflow:hidden; border:1px solid rgba(255,255,255,0.10); background: rgba(0,0,0,0.12); }
+    #map{ height:100%; width:100%; }
+
+    .row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .tag{
+      font-size:12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: rgba(234,240,255,0.85);
+      display:inline-flex; align-items:center; gap:8px;
+      white-space:nowrap;
+    }
+    .tag.red{ border-color: rgba(239,68,68,0.55); background: rgba(239,68,68,0.16); }
+    .tag.green{ border-color: rgba(34,197,94,0.50); background: rgba(34,197,94,0.14); }
+    .tag.blue{ border-color: rgba(96,165,250,0.55); background: rgba(96,165,250,0.16); }
+    .tag.violet{ border-color: rgba(167,139,250,0.55); background: rgba(167,139,250,0.14); }
+
+    .banner{
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 18px;
+      border:1px solid rgba(239,68,68,0.60);
+      background: rgba(239,68,68,0.18);
+      display:flex; justify-content:space-between; align-items:center; gap:10px;
+    }
+    .banner strong{ font-weight: 950; }
+
+    .charts{ display:grid; grid-template-columns: 1fr; gap: 12px; }
+    canvas{ background: rgba(0,0,0,0.12); border:1px solid rgba(255,255,255,0.10); border-radius: 18px; padding: 10px; }
+
+    .feed{
+      max-height: 280px;
+      overflow:auto;
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius: 18px;
+      background: rgba(0,0,0,0.18);
+      padding: 10px;
+    }
+    .evt{
+      padding: 10px;
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+      margin-bottom: 10px;
+    }
+    .evtTop{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .evtT{ font-weight: 900; }
+    .evtTime{ font-size:12px; color:var(--muted); white-space:nowrap; }
+    .evtD{ margin-top:6px; font-size:12px; color: rgba(234,240,255,0.82); }
+
+    pre{
+      margin: 12px 0 0 0;
+      padding: 12px;
+      border-radius: 18px;
+      border:1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.22);
+      font-size:12px;
+      line-height:1.45;
+      overflow:auto;
+      max-height: 260px;
+    }
+
+    @media (max-width: 1000px){
+      .layout{ grid-template-columns: 1fr; height:auto; }
+      .mapWrap{ height: 380px; }
+      .grid3{ grid-template-columns: 1fr; }
+      .grid2{ grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 
 <body>
-  <div class="topbar">
-    <div class="title">KidCruiser Dashboard</div>
-    <div class="muted" id="conn">Connecting…</div>
+  <div id="root"></div>
 
-    <div style="margin-left:auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-      <span class="badge blue" id="vehBadge">VEHICLE: —</span>
-      <span class="badge" id="stateBadge">STATE: —</span>
-      <span class="badge" id="emgBadge">EMERGENCY: —</span>
-      <button class="btn" id="notifyBtn">Enable Alerts</button>
-    </div>
-  </div>
+  <script type="text/babel">
+    // === CONFIG (your real RTDB) ===
+    const DB_BASE = "https://kidcruiser-c3c68-default-rtdb.europe-west1.firebasedatabase.app";
+    const VEHICLE_ID = "kronach_shuttle_8";
+    const STREAM_URL = `${DB_BASE}/vehicles/${VEHICLE_ID}.json`;
 
-  <div class="layout">
-    <div id="map"></div>
+    // Kronach-ish center for initial map
+    const KRONACH_CENTER = [50.241, 11.331];
 
-    <div class="panel">
-      <h3 class="h">Live Telemetry</h3>
+    // Demo geofences (edit later)
+    const GEOFENCES = [
+      { id:"school", name:"School (Kronach)", lat:50.2399, lon:11.3315, radiusM:80 },
+      { id:"pickup1", name:"Pickup (demo)", lat:50.2443, lon:11.3236, radiusM:60 },
+    ];
 
-      <div class="row"><div class="k">Updated</div><div class="v" id="upd">—</div></div>
-      <div class="row"><div class="k">Lat/Lon</div><div class="v" id="ll">—</div></div>
-      <div class="row"><div class="k">Speed (m/s)</div><div class="v" id="spd">—</div></div>
-      <div class="row"><div class="k">Source</div><div class="v" id="src">—</div></div>
-
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 10px 0;">
-        <span class="pill" id="gpsPill">GPS: —</span>
-        <span class="pill" id="odomPill">ODOM: —</span>
-      </div>
-
-      <h3 class="h" style="margin-top:16px;">Raw JSON</h3>
-      <pre id="raw">{}</pre>
-
-      <div class="foot">
-        Alerts fire when <b>emergency</b> transitions from <b>false → true</b>.
-        Your browser tab must be open for alerts.
-      </div>
-    </div>
-  </div>
-
-<script>
-  // ✅ Your Firebase RTDB base
-  const FIREBASE_DB_BASE = "https://kidcruiser-c3c68-default-rtdb.europe-west1.firebasedatabase.app";
-  // ✅ Your vehicle id (must match what Jetson writes)
-  const VEHICLE_ID = "kronach_shuttle_8";
-
-  const VEHICLE_URL = `${FIREBASE_DB_BASE}/vehicles/${VEHICLE_ID}.json`;
-
-  // Kronach center-ish for initial map view
-  const kronach = [50.241, 11.331];
-
-  const map = L.map("map").setView(kronach, 14);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
-
-  const marker = L.marker(kronach).addTo(map).bindPopup(`Shuttle: ${VEHICLE_ID}`);
-  let alertsEnabled = false;
-  let lastEmergency = false;
-
-  const connEl = document.getElementById("conn");
-  const rawEl = document.getElementById("raw");
-
-  function setBadge(elId, text, cls) {
-    const el = document.getElementById(elId);
-    el.className = "badge " + (cls || "");
-    el.textContent = text;
-  }
-
-  document.getElementById("notifyBtn").onclick = async () => {
-    if (!("Notification" in window)) {
-      alert("This browser does not support notifications.");
-      return;
+    function fmtLL(lat, lon){
+      return (typeof lat==="number" && typeof lon==="number") ? `${lat.toFixed(6)}, ${lon.toFixed(6)}` : "—";
     }
-    const perm = await Notification.requestPermission();
-    alertsEnabled = (perm === "granted");
-    document.getElementById("notifyBtn").textContent = alertsEnabled ? "Alerts Enabled" : "Enable Alerts";
-  };
+    function fmtSpeed(v){
+      return (typeof v==="number") ? `${v.toFixed(2)} m/s` : "—";
+    }
+    function isoNow(){ return new Date().toISOString(); }
+    function prettyTime(ts){
+      if(!ts) return "—";
+      // works for ISO strings or epoch seconds/ms
+      const d = (typeof ts === "string") ? new Date(ts) : new Date(Number(ts));
+      if(isNaN(d.getTime())) return String(ts);
+      return d.toLocaleString();
+    }
 
-  function fmt(n, digits=2) {
-    return (typeof n === "number") ? n.toFixed(digits) : "—";
-  }
+    async function reverseGeocode(lat, lon, signal){
+      // Best-effort: for production you’d proxy + cache
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&zoom=18&addressdetails=1`;
+      const r = await fetch(url, { signal, headers: { "Accept":"application/json", "Accept-Language":"de" } });
+      if(!r.ok) throw new Error("geocode");
+      const j = await r.json();
+      return j?.display_name || null;
+    }
 
-  async function poll() {
-    try {
-      const r = await fetch(VEHICLE_URL, { cache: "no-store" });
-      const data = await r.json();
+    function useFirebaseStream(url){
+      const [data, setData] = React.useState(null);
+      const [conn, setConn] = React.useState("Connecting…");
 
-      if (!data) {
-        connEl.textContent = "No data yet (waiting…)";
-        return;
-      }
+      React.useEffect(() => {
+        const es = new EventSource(url);
 
-      connEl.textContent = "Live";
-      setBadge("vehBadge", `VEHICLE: ${data.vehicle_id || VEHICLE_ID}`, "blue");
+        const applyEvent = (e) => {
+          const msg = JSON.parse(e.data || "{}");
+          const path = msg.path;
+          const payload = msg.data;
 
-      const state = data.state || "—";
-      setBadge("stateBadge", `STATE: ${state}`, "");
+          setData(prev => {
+            const base = prev ?? {};
+            if(path === "/" || path === "") return payload ?? null;
 
-      const emg = !!data.emergency;
-      setBadge("emgBadge", `EMERGENCY: ${emg ? "YES" : "NO"}`, emg ? "red" : "green");
+            const parts = path.split("/").filter(Boolean);
+            const next = structuredClone(base);
+            let cur = next;
+            for(let i=0;i<parts.length-1;i++){
+              const k = parts[i];
+              cur[k] = cur[k] ?? {};
+              cur = cur[k];
+            }
+            cur[parts[parts.length-1]] = payload;
+            return next;
+          });
+        };
 
-      document.getElementById("upd").textContent = data.updated_at || "—";
-      document.getElementById("src").textContent = data.source || "—";
-      document.getElementById("spd").textContent = (typeof data.speed_mps === "number") ? data.speed_mps.toFixed(2) : "—";
+        es.addEventListener("open", () => setConn("Live (stream)"));
+        es.addEventListener("error", () => setConn("Reconnecting…"));
+        es.addEventListener("put", applyEvent);
+        es.addEventListener("patch", applyEvent);
 
-      const lat = data.lat;
-      const lon = data.lon;
+        return () => es.close();
+      }, [url]);
 
-      const gpsOk = (typeof lat === "number" && typeof lon === "number");
-      document.getElementById("gpsPill").textContent = `GPS: ${gpsOk ? "OK" : "—"}`;
-      document.getElementById("odomPill").textContent = `ODOM: ${(typeof data.x === "number" && typeof data.y === "number") ? "OK" : "—"}`;
+      return { data, conn };
+    }
 
-      if (gpsOk) {
-        document.getElementById("ll").textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    function ChartLine({ id, title, subtitle, dataPoints, labels }){
+      const ref = React.useRef(null);
+      const chartRef = React.useRef(null);
+
+      React.useEffect(() => {
+        const ctx = ref.current.getContext("2d");
+        if(chartRef.current) chartRef.current.destroy();
+
+        chartRef.current = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [{
+              label: title,
+              data: dataPoints,
+              tension: 0.25,
+              pointRadius: 0,
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { intersect:false, mode:"index" }
+            },
+            scales: {
+              x: { ticks: { maxTicksLimit: 6 }, grid: { color: "rgba(255,255,255,0.06)" } },
+              y: { grid: { color: "rgba(255,255,255,0.06)" } }
+            }
+          }
+        });
+
+        return () => chartRef.current && chartRef.current.destroy();
+      }, [dataPoints.join(","), labels.join(",")]);
+
+      return (
+        <div className="stat" style={{padding:12}}>
+          <div className="row" style={{marginBottom:10}}>
+            <div>
+              <div style={{fontWeight:950}}>{title}</div>
+              <div className="k">{subtitle}</div>
+            </div>
+            <span className="tag violet">Live</span>
+          </div>
+          <div style={{height:160}}>
+            <canvas id={id} ref={ref}></canvas>
+          </div>
+        </div>
+      );
+    }
+
+    function App(){
+      const { data, conn } = useFirebaseStream(STREAM_URL);
+
+      const [address, setAddress] = React.useState("—");
+      const [alertsEnabled, setAlertsEnabled] = React.useState(false);
+      const [simEmergency, setSimEmergency] = React.useState(false);
+
+      const [feed, setFeed] = React.useState([]);
+      const lastEmergencyRef = React.useRef(false);
+      const lastGeoRef = React.useRef({lat:null, lon:null, t:0});
+
+      // For “dashboard feel”: keep a rolling series
+      const [speedSeries, setSpeedSeries] = React.useState([]);
+      const [latencySeries, setLatencySeries] = React.useState([]);
+      const [labels, setLabels] = React.useState([]);
+
+      // Leaflet
+      const mapRef = React.useRef(null);
+      const markerRef = React.useRef(null);
+
+      const lat = data?.lat;
+      const lon = data?.lon;
+      const speed = data?.speed_mps;
+      const updated = data?.updated_at;
+      const source = data?.source ?? "—";
+      const state = data?.state ?? "—";
+      const realEmergency = !!data?.emergency;
+      const emergency = realEmergency || simEmergency;
+
+      // Connection indicator dot
+      const connDot = conn.includes("Live") ? "good" : (conn.includes("Reconnect") ? "warn" : "bad");
+
+      // Initialize map once
+      React.useEffect(() => {
+        if(mapRef.current) return;
+
+        const map = L.map("map", { zoomControl:true }).setView(KRONACH_CENTER, 14);
+        mapRef.current = map;
+
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+
+        // Geofences
+        GEOFENCES.forEach(g => {
+          L.circle([g.lat, g.lon], { radius:g.radiusM }).addTo(map).bindTooltip(g.name);
+        });
+
+        const marker = L.marker(KRONACH_CENTER).addTo(map);
+        marker.bindPopup("KidCruiser Shuttle");
+        markerRef.current = marker;
+      }, []);
+
+      // Move marker on new GPS
+      React.useEffect(() => {
+        if(typeof lat !== "number" || typeof lon !== "number") return;
+        const map = mapRef.current;
+        const marker = markerRef.current;
+        if(!map || !marker) return;
+
         const pos = [lat, lon];
         marker.setLatLng(pos);
-        // smooth-ish tracking
-        map.panTo(pos, { animate: true, duration: 0.5 });
-      } else {
-        document.getElementById("ll").textContent = "—";
-      }
+        map.panTo(pos, { animate:true, duration:0.55 });
+      }, [lat, lon]);
 
-      rawEl.textContent = JSON.stringify(data, null, 2);
+      // Reverse geocode (throttle)
+      React.useEffect(() => {
+        if(typeof lat !== "number" || typeof lon !== "number") return;
 
-      // Notify on false -> true
-      if (alertsEnabled && !lastEmergency && emg) {
-        new Notification("KidCruiser Emergency", {
-          body: `${VEHICLE_ID} triggered EMERGENCY`,
-        });
-      }
-      lastEmergency = emg;
+        const now = Date.now();
+        const last = lastGeoRef.current;
+        const movedEnough =
+          last.lat === null || Math.abs(lat - last.lat) > 0.00015 || Math.abs(lon - last.lon) > 0.00015;
+        const coolDownOk = (now - last.t) > 9000;
 
-    } catch (e) {
-      connEl.textContent = "Disconnected";
+        if(!movedEnough || !coolDownOk) return;
+
+        const ac = new AbortController();
+        setAddress("Resolving street…");
+        reverseGeocode(lat, lon, ac.signal)
+          .then(name => setAddress(name || "Unknown street"))
+          .catch(() => setAddress("Street lookup unavailable"))
+          .finally(() => { lastGeoRef.current = {lat, lon, t: Date.now()}; });
+
+        return () => ac.abort();
+      }, [lat, lon]);
+
+      // Dummy emergency simulator (auto blip if no real emergency)
+      React.useEffect(() => {
+        if(realEmergency) return;
+        let onTimer=null, offTimer=null;
+
+        function schedule(){
+          const next = (30 + Math.random()*60) * 1000; // 30–90s
+          onTimer = setTimeout(() => {
+            setSimEmergency(true);
+            offTimer = setTimeout(() => setSimEmergency(false), 10_000);
+            schedule();
+          }, next);
+        }
+        schedule();
+        return () => { if(onTimer) clearTimeout(onTimer); if(offTimer) clearTimeout(offTimer); };
+      }, [realEmergency]);
+
+      // Feed + notifications on emergency edge
+      React.useEffect(() => {
+        const rising = !lastEmergencyRef.current && emergency;
+        const falling = lastEmergencyRef.current && !emergency;
+
+        if(rising){
+          setFeed(prev => [{ t: isoNow(), type:"EMERGENCY", msg:`Emergency triggered for ${VEHICLE_ID}` }, ...prev].slice(0, 30));
+          if(alertsEnabled){
+            try { new Notification("KidCruiser Emergency", { body: `Emergency detected for ${VEHICLE_ID}` }); } catch {}
+          }
+        }
+        if(falling){
+          setFeed(prev => [{ t: isoNow(), type:"RECOVERED", msg:`Emergency cleared for ${VEHICLE_ID}` }, ...prev].slice(0, 30));
+        }
+        lastEmergencyRef.current = emergency;
+      }, [emergency, alertsEnabled]);
+
+      // Add “heartbeat” events when state changes
+      const lastStateRef = React.useRef(null);
+      React.useEffect(() => {
+        if(!state || state === "—") return;
+        if(lastStateRef.current === null){ lastStateRef.current = state; return; }
+        if(state !== lastStateRef.current){
+          setFeed(prev => [{ t: isoNow(), type:"STATE", msg:`State changed: ${lastStateRef.current} → ${state}` }, ...prev].slice(0, 30));
+          lastStateRef.current = state;
+        }
+      }, [state]);
+
+      // Update chart series
+      React.useEffect(() => {
+        // keep it stable even if speed missing
+        const t = new Date();
+        const label = t.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+
+        // latency from updated_at (if ISO)
+        let latencyMs = null;
+        if(typeof updated === "string"){
+          const d = new Date(updated);
+          if(!isNaN(d.getTime())) latencyMs = Math.max(0, Date.now() - d.getTime());
+        }
+
+        setLabels(prev => [...prev, label].slice(-40));
+        setSpeedSeries(prev => [...prev, (typeof speed === "number" ? speed : null)].slice(-40));
+        setLatencySeries(prev => [...prev, (typeof latencyMs === "number" ? Math.round(latencyMs/100)/10 : null)].slice(-40));
+      }, [speed, updated, lat, lon]);
+
+      const enableAlerts = async () => {
+        if(!("Notification" in window)){ alert("Browser notifications not supported."); return; }
+        const perm = await Notification.requestPermission();
+        setAlertsEnabled(perm === "granted");
+      };
+
+      // parent-friendly “status”
+      const statusTag = emergency ? { cls:"red", text:"Emergency" } :
+                        conn.includes("Live") ? { cls:"green", text:"On route" } :
+                        { cls:"blue", text:"Connecting" };
+
+      return (
+        <div className="shell">
+          <header className="topbar">
+            <div className="brand">
+              <div className="logo"></div>
+              <div>
+                <div className="title">KidCruiser</div>
+                <div className="sub">Parent realtime shuttle monitor • Kronach</div>
+              </div>
+            </div>
+
+            <div className="right">
+              <span className="pill"><span className={"dot " + connDot}></span>{conn}</span>
+              <span className="pill"><span className="dot"></span>{VEHICLE_ID}</span>
+              <span className={"tag " + statusTag.cls}><span className="dot"></span>{statusTag.text}</span>
+
+              <button className="btn" onClick={enableAlerts}>
+                {alertsEnabled ? "Alerts Enabled" : "Enable Alerts"}
+              </button>
+
+              <button className="btn" onClick={() => setSimEmergency(v => !v)}>
+                {simEmergency ? "Stop Demo Emergency" : "Trigger Demo Emergency"}
+              </button>
+            </div>
+          </header>
+
+          <div className="layout">
+            <section className="card">
+              <div className="cardHead">
+                <div className="cardTitle">Live Location</div>
+                <span className="pill">{fmtLL(lat, lon)}</span>
+              </div>
+
+              <div className="cardBody">
+                <div className="grid3">
+                  <div className="stat">
+                    <div className="k">Street / Area</div>
+                    <div className="v" style={{fontSize:14}}>{address}</div>
+                  </div>
+                  <div className="stat">
+                    <div className="k">Speed</div>
+                    <div className="v">{fmtSpeed(speed)}</div>
+                  </div>
+                  <div className="stat">
+                    <div className="k">Last update</div>
+                    <div className="v" style={{fontSize:14}}>{prettyTime(updated)}</div>
+                  </div>
+                </div>
+
+                {emergency && (
+                  <div className="banner">
+                    <div>
+                      <strong>Emergency active</strong>
+                      <div className="k">Parents/school should be notified. Location shown above.</div>
+                    </div>
+                    <span className="tag red">ALERT</span>
+                  </div>
+                )}
+
+                <div style={{height:12}}></div>
+                <div className="mapWrap"><div id="map"></div></div>
+
+                <div style={{height:12}}></div>
+                <div className="grid2">
+                  <ChartLine
+                    id="speedChart"
+                    title="Speed trend"
+                    subtitle="Latest ~40 samples (stream updates)"
+                    dataPoints={speedSeries}
+                    labels={labels}
+                  />
+                  <ChartLine
+                    id="latencyChart"
+                    title="Telemetry latency (s)"
+                    subtitle="Derived from updated_at timestamps (best effort)"
+                    dataPoints={latencySeries}
+                    labels={labels}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <aside className="card">
+              <div className="cardHead">
+                <div className="cardTitle">Parent Feed</div>
+                <span className="tag blue">Realtime</span>
+              </div>
+
+              <div className="cardBody">
+                <div className="grid2">
+                  <div className="stat">
+                    <div className="k">State</div>
+                    <div className="v" style={{fontSize:16}}>{state}</div>
+                  </div>
+                  <div className="stat">
+                    <div className="k">Source</div>
+                    <div className="v" style={{fontSize:16}}>{source}</div>
+                  </div>
+                </div>
+
+                <div style={{height:12}}></div>
+                <div className="feed">
+                  {feed.length === 0 ? (
+                    <div className="k">No events yet. Emergency + state changes will appear here.</div>
+                  ) : feed.map((e, idx) => (
+                    <div className="evt" key={idx}>
+                      <div className="evtTop">
+                        <div className="evtT">
+                          {e.type === "EMERGENCY" ? "🚨 Emergency" :
+                           e.type === "RECOVERED" ? "✅ Recovered" :
+                           "📍 Update"}
+                        </div>
+                        <div className="evtTime">{prettyTime(e.t)}</div>
+                      </div>
+                      <div className="evtD">{e.msg}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <pre>{JSON.stringify(data ?? {}, null, 2)}</pre>
+              </div>
+            </aside>
+          </div>
+        </div>
+      );
     }
-  }
 
-  poll();
-  setInterval(poll, 1000);
-</script>
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
 </body>
 </html>
